@@ -145,8 +145,9 @@ def _connect(host, port, mysql_sock, user, password, defaults_file, ssl, connect
                 connect_timeout=connect_timeout
             )
         return db
-    except Exception:
-        raise
+    except Exception as e:
+        msg = "socket=" + mysql_sock + " host= " + host + " port=" + str(port) + str(e)
+        utils.TestLogger.error(msg)
 
 
 def mysql_connect(sockfile, user, passwd):
@@ -226,14 +227,18 @@ class Mysql(CollectorBase):
         if self.dbs is None:
             self.sockfile = ''
             self.dbs = {}
-            dbname = 'specific'
-            db = _connect(self.host, self.port, self.sockfile, self.connection_user, self.connection_pass, "", {},
-                          CONNECT_TIMEOUT)
-            cursor = db.cursor()
-            cursor.execute("SELECT VERSION()")
-            version = cursor.fetchone()[0]
-            self.dbs[dbname] = DB(self.host, self.port, self.sockfile, dbname, db, cursor, version,
-                                  self.connection_user, self.connection_pass)
+            try:
+                dbname = 'specific'
+                db = _connect(self.host, self.port, self.sockfile, self.connection_user, self.connection_pass, "", {},
+                              CONNECT_TIMEOUT)
+                cursor = db.cursor()
+                cursor.execute("SELECT VERSION()")
+                version = cursor.fetchone()[0]
+                self.dbs[dbname] = DB(self.host, self.port, self.sockfile, dbname, db, cursor, version,
+                                      self.connection_user, self.connection_pass)
+            except Exception as e:
+                self._readq.nput("mysql.state %s %s" % (int(time.time()), '1'))
+                self.log_error("Fail to connect to specific mysql server")
 
         errs = []
         for dbname, db in self.dbs.iteritems():
